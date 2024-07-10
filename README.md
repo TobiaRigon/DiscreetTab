@@ -1,4 +1,4 @@
-# Nascondi Dettagli Scheda
+# DiscreetTab
 
 This extension for Chrome and Firefox hides the browser tab's favicon and title to enhance privacy.
 
