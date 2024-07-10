@@ -1,0 +1,25 @@
+{
+    "manifest_version": 3,
+    "name": "DiscreetTab",
+    "version": "1.0",
+    "description": "Hides the favicon and the title of the website in the browser tab.",
+    "permissions": [
+      "activeTab",
+      "scripting"
+    ],
+    "background": {
+      "page": "background.html"
+    },
+    "action": {
+      "default_title": "DiscreetTab",
+      "default_icon": {
+        "128": "DiscreetTab_Logo_128x128.png"
+      }
+    },
+    "browser_specific_settings": {
+      "gecko": {
+        "id": "{3f1c2e1a-1a4d-41d2-8b87-3d79f7f9d6ab}"
+      }
+    }
+  }
+  
