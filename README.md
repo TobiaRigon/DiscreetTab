@@ -6,14 +6,11 @@ This extension for Chrome and Firefox hides the browser tab's favicon and title 
 
 ### Chrome
 
-1. Download the extension from [Chrome Web Store](https://chromewebstore.google.com/detail/discreettab/ndhpbpnlphipmfgedhgcjehhdpoakboj) **or** use the files directly:
-   - Download [Chrome test](https://github.com/TobiaRigon/DiscreetTab/tree/main/chrome/chrome%20test) package.
-   - Go to `chrome://extensions/` and click on "Load unpacked," then select the extension folder.
+- Download the extension from [Chrome Web Store](https://chromewebstore.google.com/detail/discreettab/ndhpbpnlphipmfgedhgcjehhdpoakboj).
 
 ### Firefox
 
-1. Download the extension from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/discreettab/).
-2. Click on the extension icon to hide the current tab's details.
+- Download the extension from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/discreettab/).
 
 ## Usage
 
