@@ -1,20 +1,28 @@
 {
-    "manifest_version": 3,
-    "name": "DiscreetTab",
-    "version": "1.0",
-    "description": "Hides the favicon and the title of the website in the browser tab.",
-    "permissions": [
-      "activeTab",
-      "scripting"
-    ],
-    "background": {
-      "service_worker": "../common/background.js"
-    },
-    "action": {
-      "default_title": "DiscreetTab",
-      "default_icon": {
-        "128": "../common/DiscreetTab_Logo_128x128.png"
-      }
+  "manifest_version": 3,
+  "name": "DiscreetTab",
+  "version": "1.1",
+  "description": "Rende più discreti titolo e favicon delle schede.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs",
+    "sessions",
+    "webRequest",
+    "webRequestBlocking"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "DiscreetTab",
+    "default_icon": {
+      "128": "../common/DiscreetTab_Logo_128x128.png"
     }
-  }
-  
+  },
+  "options_page": "options.html"
+}
