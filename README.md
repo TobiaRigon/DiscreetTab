@@ -33,8 +33,8 @@ Click on the extension icon to hide the favicon and title of the current tab.
    git clone https://github.com/TobiaRigon/DiscreetTab.git
 
     Load the extension in the browser:
-        Chrome: Go to chrome://extensions/ and click on "Load unpacked," then select the project folder.
-        Firefox: Go to about:debugging and click on "Load Temporary Add-on," then select the manifest.json file.
+       Chrome: vai su chrome://extensions/ e clicca "Carica estensione non pacchettizzata" quindi seleziona la cartella `chrome` del progetto.
+       Firefox: Go to about:debugging and click on "Load Temporary Add-on," then select the manifest.json file.
    ```
 
 ### Contributions

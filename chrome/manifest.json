@@ -21,7 +21,7 @@
   "action": {
     "default_title": "DiscreetTab",
     "default_icon": {
-      "128": "../common/DiscreetTab_Logo_128x128.png"
+      "128": "DiscreetTab_Logo_128x128.png"
     }
   },
   "options_page": "options.html"
