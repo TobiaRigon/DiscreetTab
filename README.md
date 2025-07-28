@@ -2,6 +2,8 @@
 
 This extension for Chrome and Firefox hides the browser tab's favicon and title to enhance privacy.
 
+L'estensione salva lo stato "discreto" di ogni scheda, mantenendolo dopo i refresh e, se desiderato, anche tra le sessioni. E' possibile scegliere il formato del titolo anonimizzato e attivare la modalità discreta di default per le nuove schede tramite la pagina opzioni.
+
 ## Installation
 
 ### Chrome
