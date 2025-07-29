@@ -5,23 +5,69 @@
   <title>DiscreetTab Settings</title>
   <style>
     body {
-      font-family: sans-serif;
-      padding: 20px;
-      max-width: 400px;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      padding: 32px 24px;
+      max-width: 420px;
+      margin: 40px auto;
+      background: #f7f9fb;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    }
+
+    h2 {
+      margin-bottom: 24px;
+      color: #222;
+      font-size: 1.5em;
+      letter-spacing: 0.5px;
+      text-align: center;
     }
 
     label {
       display: block;
-      margin: 12px 0 4px;
-      font-weight: bold;
+      margin: 18px 0 6px;
+      font-weight: 500;
+      color: #333;
+      font-size: 1em;
+    }
+
+    input[type="checkbox"] {
+      accent-color: #0077cc;
+      margin-right: 8px;
+      transform: scale(1.15);
+      vertical-align: middle;
     }
 
     input[type="text"] {
       width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #cfd8dc;
+      border-radius: 5px;
+      font-size: 1em;
+      margin-bottom: 8px;
+      background: #fff;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus {
+      border-color: #0077cc;
+      outline: none;
     }
 
     button {
-      margin-top: 12px;
+      margin-top: 16px;
+      padding: 10px 22px;
+      background: linear-gradient(90deg, #0077cc 0%, #00b4d8 100%);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      transition: background 0.2s, transform 0.1s;
+    }
+    button:hover {
+      background: linear-gradient(90deg, #005fa3 0%, #0096c7 100%);
+      transform: translateY(-2px) scale(1.03);
     }
 
     .tooltip {
@@ -30,24 +76,27 @@
       cursor: help;
       color: #0077cc;
       text-decoration: underline dotted;
+      margin-left: 4px;
+      font-size: 0.95em;
     }
 
     .tooltip-text {
       visibility: hidden;
       width: 280px;
-      background-color: #333;
+      background-color: #222;
       color: #fff;
       text-align: left;
-      padding: 8px;
-      border-radius: 4px;
+      padding: 10px 12px;
+      border-radius: 6px;
       position: absolute;
-      z-index: 1;
-      bottom: 125%; /* above the text */
+      z-index: 2;
+      bottom: 135%;
       left: 50%;
       margin-left: -140px;
       opacity: 0;
       transition: opacity 0.3s;
-      font-size: 0.85em;
+      font-size: 0.92em;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.13);
     }
 
     .tooltip:hover .tooltip-text {
@@ -56,18 +105,27 @@
     }
 
     .donate {
-      margin-top: 20px;
-      font-size: 0.9em;
-      color: #333;
+      margin-top: 28px;
+      font-size: 0.97em;
+      color: #444;
+      text-align: center;
+      background: #e3f2fd;
+      padding: 10px 0;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
     }
 
     .donate a {
       color: #0077cc;
       text-decoration: none;
+      font-weight: 500;
+      margin-left: 4px;
+      transition: color 0.2s;
     }
 
     .donate a:hover {
       text-decoration: underline;
+      color: #005fa3;
     }
   </style>
 </head>

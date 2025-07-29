@@ -8,7 +8,6 @@ chrome.runtime.onInstalled.addListener(() => {
     }
   });
 
-  // Inizializza gli array di indici se non esistono
   chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
     if (!Array.isArray(res.usedIndexes)) {
       chrome.storage.local.set({ usedIndexes: [] });
@@ -25,7 +24,6 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-
 // Click sull'icona dell'estensione
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab || !tab.url || !tab.id || isUnsupportedUrl(tab.url)) return;
@@ -41,11 +39,13 @@ chrome.action.onClicked.addListener(async (tab) => {
     await releaseIndex(index);
     await chrome.storage.local.set({ [STORAGE_KEY]: data });
 
-    chrome.scripting.executeScript({
+    await chrome.scripting.executeScript({
       target: { tabId },
       func: (title) => {
         if (document.head) {
           document.title = title;
+          // Ripristina favicon default
+          document.querySelectorAll("link[rel*='icon']").forEach(e => e.remove());
           const link = document.createElement("link");
           link.rel = "icon";
           link.href = "/favicon.ico";
@@ -65,10 +65,9 @@ chrome.action.onClicked.addListener(async (tab) => {
     };
     await chrome.storage.local.set({ [STORAGE_KEY]: data });
 
-    injectScript(tabId, index);
+    await injectScript(tabId, index);
   }
 });
-
 
 // Gestione caricamento pagine
 chrome.webNavigation.onCompleted.addListener(async ({ tabId, frameId, url }) => {
@@ -82,20 +81,19 @@ chrome.webNavigation.onCompleted.addListener(async ({ tabId, frameId, url }) => 
     ]);
 
     if (data[domain]) {
-      injectScript(tabId, data[domain].index);
+      await injectScript(tabId, data[domain].index);
     } else if (options.defaultDiscreetEnabled) {
       const index = await getNextAvailableIndex();
       await reserveIndex(index);
       data[domain] = { index, originalTitle: '' };
       await chrome.storage.local.set({ [STORAGE_KEY]: data });
-      injectScript(tabId, index);
+      await injectScript(tabId, index);
     }
 
   } catch (e) {
     // URL malformato o non gestibile
   }
 });
-
 
 // Nuove tab: applica modalità discreta se attiva
 chrome.tabs.onCreated.addListener(async (tab) => {
@@ -118,18 +116,16 @@ chrome.tabs.onCreated.addListener(async (tab) => {
     };
     await chrome.storage.local.set({ [STORAGE_KEY]: data });
 
-    injectScript(tab.id, index);
+    await injectScript(tab.id, index);
   }
 });
 
-
 // Context menu per aprire la pagina delle opzioni
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener((info) => {
   if (info.menuItemId === "open_settings") {
     chrome.runtime.openOptionsPage();
   }
 });
-
 
 // Helpers
 function getStoredData() {
@@ -145,7 +141,7 @@ function getStoredOptions() {
     chrome.storage.local.get(['titleFormat', 'defaultDiscreetEnabled'], (res) => {
       resolve({
         titleFormat: res.titleFormat || '[{n}]',
-        defaultDiscreetEnabled: res.defaultDiscreetEnabled || false
+        defaultDiscreetEnabled: !!res.defaultDiscreetEnabled
       });
     });
   });
@@ -155,28 +151,23 @@ function formatTitle(template, number) {
   return template.replaceAll('{n}', number.toString());
 }
 
+async function injectScript(tabId, number) {
+  const options = await getStoredOptions();
+  const title = formatTitle(options.titleFormat, number);
 
-function injectScript(tabId, number) {
-  getStoredOptions().then((options) => {
-    const title = formatTitle(options.titleFormat, number);
-
-    chrome.scripting.executeScript({
-      target: { tabId },
-      func: (customTitle) => {
-        if (!document.head) return;
-
-        document.querySelectorAll("link[rel*='icon']").forEach(e => e.remove());
-
-        const link = document.createElement("link");
-        link.rel = "icon";
-        link.type = "image/x-icon";
-        link.href = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgwJ/lr6pNwAAAABJRU5ErkJggg==";
-        document.head.appendChild(link);
-
-        document.title = customTitle;
-      },
-      args: [title]
-    });
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    func: (customTitle) => {
+      if (!document.head) return;
+      document.querySelectorAll("link[rel*='icon']").forEach(e => e.remove());
+      const link = document.createElement("link");
+      link.rel = "icon";
+      link.type = "image/x-icon";
+      link.href = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgwJ/lr6pNwAAAABJRU5ErkJggg==";
+      document.head.appendChild(link);
+      document.title = customTitle;
+    },
+    args: [title]
   });
 }
 
@@ -189,9 +180,8 @@ function isUnsupportedUrl(url) {
   );
 }
 
-
 // Gestione degli indici
-async function getNextAvailableIndex() {
+function getNextAvailableIndex() {
   return new Promise((resolve) => {
     chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
       const used = res.usedIndexes || [];
@@ -210,7 +200,7 @@ async function getNextAvailableIndex() {
   });
 }
 
-async function reserveIndex(index) {
+function reserveIndex(index) {
   return new Promise((resolve) => {
     chrome.storage.local.get(['usedIndexes'], (res) => {
       const used = new Set(res.usedIndexes || []);
@@ -220,7 +210,7 @@ async function reserveIndex(index) {
   });
 }
 
-async function releaseIndex(index) {
+function releaseIndex(index) {
   return new Promise((resolve) => {
     chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
       const used = new Set(res.usedIndexes || []);
