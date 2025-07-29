@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>DiscreetTab Settings</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 400px; }
+    label { display: block; margin: 12px 0 4px; font-weight: bold; }
+    input[type="text"] { width: 100%; }
+    button { margin-top: 12px; }
+    .hint { font-size: 0.9em; color: #555; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <h2>DiscreetTab Settings</h2>
+
+  <label>
+    <input type="checkbox" id="defaultDiscreet" />
+    Enable discreet mode for new tabs
+  </label>
+
+  <label for="titleFormat">Tab title format:</label>
+  <div class="hint">
+    Use <code>{n}</code> in the text to insert the tab's unique number.  
+    Example: <code>Tab {n}</code> → "Tab 1", "Tab 2", etc.
+  </div>
+  <input type="text" id="titleFormat" placeholder="Example: [{n}] or Tab {n}" />
+
+  <button id="saveBtn">Save settings</button>
+
+  <script src="options.js"></script>
+</body>
+</html>

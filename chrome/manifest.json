@@ -3,13 +3,17 @@
     "name": "DiscreetTab",
     "version": "1.0",
     "description": "Hides the favicon and the title of the website in the browser tab.",
-    "permissions": [
-    "activeTab",
-    "scripting",
-    "storage",
-    "tabs",
-    "webNavigation"
-  ],
+   "permissions": [
+  "activeTab",
+  "scripting",
+  "storage",
+  "tabs",
+  "webNavigation",
+  "contextMenus"
+],
+
+
+  "options_page": "options.html",
 
     "host_permissions": [
       "*://*/*"
@@ -20,7 +24,6 @@
     "action": {
       "default_title": "DiscreetTab",
       "default_icon": "DiscreetTab_Logo_128x128.png"
-      
     }
   }
   

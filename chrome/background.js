@@ -1,17 +1,34 @@
 const STORAGE_KEY = 'discreet_domains';
 
-// Inizializza lo storage
+// Inizializzazione storage al primo avvio
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.get([STORAGE_KEY], (res) => {
     if (!res[STORAGE_KEY]) {
       chrome.storage.local.set({ [STORAGE_KEY]: {} });
     }
   });
+
+  // Inizializza gli array di indici se non esistono
+  chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
+    if (!Array.isArray(res.usedIndexes)) {
+      chrome.storage.local.set({ usedIndexes: [] });
+    }
+    if (!Array.isArray(res.freeIndexes)) {
+      chrome.storage.local.set({ freeIndexes: [] });
+    }
+  });
+
+  chrome.contextMenus.create({
+    id: "open_settings",
+    title: "Impostazioni DiscreetTab",
+    contexts: ["action"]
+  });
 });
+
 
 // Click sull'icona dell'estensione
 chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab || !tab.url || !tab.id || !tab.title || isUnsupportedUrl(tab.url)) return;
+  if (!tab || !tab.url || !tab.id || isUnsupportedUrl(tab.url)) return;
 
   const url = new URL(tab.url);
   const domain = url.hostname;
@@ -19,9 +36,9 @@ chrome.action.onClicked.addListener(async (tab) => {
   const data = await getStoredData();
 
   if (data[domain]) {
-    // Rimuovi dominio dalla lista
-    const originalTitle = data[domain].originalTitle || '';
+    const { index, originalTitle } = data[domain];
     delete data[domain];
+    await releaseIndex(index);
     await chrome.storage.local.set({ [STORAGE_KEY]: data });
 
     chrome.scripting.executeScript({
@@ -29,7 +46,6 @@ chrome.action.onClicked.addListener(async (tab) => {
       func: (title) => {
         if (document.head) {
           document.title = title;
-
           const link = document.createElement("link");
           link.rel = "icon";
           link.href = "/favicon.ico";
@@ -40,11 +56,12 @@ chrome.action.onClicked.addListener(async (tab) => {
     });
 
   } else {
-    // Aggiungi dominio
-    const index = Object.keys(data).length + 1;
+    const index = await getNextAvailableIndex();
+    await reserveIndex(index);
+
     data[domain] = {
       index,
-      originalTitle: tab.title
+      originalTitle: tab.title || ''
     };
     await chrome.storage.local.set({ [STORAGE_KEY]: data });
 
@@ -52,20 +69,67 @@ chrome.action.onClicked.addListener(async (tab) => {
   }
 });
 
-// Su completamento caricamento pagina
+
+// Gestione caricamento pagine
 chrome.webNavigation.onCompleted.addListener(async ({ tabId, frameId, url }) => {
   if (frameId !== 0 || isUnsupportedUrl(url)) return;
 
   try {
     const domain = new URL(url).hostname;
-    const data = await getStoredData();
+    const [data, options] = await Promise.all([
+      getStoredData(),
+      getStoredOptions()
+    ]);
+
     if (data[domain]) {
       injectScript(tabId, data[domain].index);
+    } else if (options.defaultDiscreetEnabled) {
+      const index = await getNextAvailableIndex();
+      await reserveIndex(index);
+      data[domain] = { index, originalTitle: '' };
+      await chrome.storage.local.set({ [STORAGE_KEY]: data });
+      injectScript(tabId, index);
     }
+
   } catch (e) {
-    // URL non valido
+    // URL malformato o non gestibile
   }
-}, { url: [{ schemes: ['http', 'https'] }] });
+});
+
+
+// Nuove tab: applica modalità discreta se attiva
+chrome.tabs.onCreated.addListener(async (tab) => {
+  if (!tab || !tab.id || !tab.url || isUnsupportedUrl(tab.url)) return;
+
+  const options = await getStoredOptions();
+  if (!options.defaultDiscreetEnabled) return;
+
+  const url = new URL(tab.url);
+  const domain = url.hostname;
+  const data = await getStoredData();
+
+  if (!data[domain]) {
+    const index = await getNextAvailableIndex();
+    await reserveIndex(index);
+
+    data[domain] = {
+      index,
+      originalTitle: tab.title || ''
+    };
+    await chrome.storage.local.set({ [STORAGE_KEY]: data });
+
+    injectScript(tab.id, index);
+  }
+});
+
+
+// Context menu per aprire la pagina delle opzioni
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "open_settings") {
+    chrome.runtime.openOptionsPage();
+  }
+});
+
 
 // Helpers
 function getStoredData() {
@@ -76,23 +140,43 @@ function getStoredData() {
   });
 }
 
+function getStoredOptions() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['titleFormat', 'defaultDiscreetEnabled'], (res) => {
+      resolve({
+        titleFormat: res.titleFormat || '[{n}]',
+        defaultDiscreetEnabled: res.defaultDiscreetEnabled || false
+      });
+    });
+  });
+}
+
+function formatTitle(template, number) {
+  return template.replaceAll('{n}', number.toString());
+}
+
+
 function injectScript(tabId, number) {
-  chrome.scripting.executeScript({
-    target: { tabId },
-    func: (count) => {
-      if (!document.head) return;
+  getStoredOptions().then((options) => {
+    const title = formatTitle(options.titleFormat, number);
 
-      document.querySelectorAll("link[rel*='icon']").forEach(e => e.remove());
+    chrome.scripting.executeScript({
+      target: { tabId },
+      func: (customTitle) => {
+        if (!document.head) return;
 
-      const link = document.createElement("link");
-      link.rel = "icon";
-      link.type = "image/x-icon";
-      link.href = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgwJ/lr6pNwAAAABJRU5ErkJggg==";
-      document.head.appendChild(link);
+        document.querySelectorAll("link[rel*='icon']").forEach(e => e.remove());
 
-      document.title = `[${count}]`;
-    },
-    args: [number]
+        const link = document.createElement("link");
+        link.rel = "icon";
+        link.type = "image/x-icon";
+        link.href = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgwJ/lr6pNwAAAABJRU5ErkJggg==";
+        document.head.appendChild(link);
+
+        document.title = customTitle;
+      },
+      args: [title]
+    });
   });
 }
 
@@ -103,4 +187,50 @@ function isUnsupportedUrl(url) {
     url.startsWith("about:") ||
     url.startsWith("file://")
   );
+}
+
+
+// Gestione degli indici
+async function getNextAvailableIndex() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
+      const used = res.usedIndexes || [];
+      const free = res.freeIndexes || [];
+
+      if (free.length > 0) {
+        const next = free.sort((a, b) => a - b).shift();
+        const remaining = free.filter(i => i !== next);
+        chrome.storage.local.set({ freeIndexes: remaining });
+        resolve(next);
+      } else {
+        const max = used.length > 0 ? Math.max(...used) : 0;
+        resolve(max + 1);
+      }
+    });
+  });
+}
+
+async function reserveIndex(index) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['usedIndexes'], (res) => {
+      const used = new Set(res.usedIndexes || []);
+      used.add(index);
+      chrome.storage.local.set({ usedIndexes: Array.from(used) }, resolve);
+    });
+  });
+}
+
+async function releaseIndex(index) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
+      const used = new Set(res.usedIndexes || []);
+      const free = new Set(res.freeIndexes || []);
+      used.delete(index);
+      free.add(index);
+      chrome.storage.local.set({
+        usedIndexes: Array.from(used),
+        freeIndexes: Array.from(free)
+      }, resolve);
+    });
+  });
 }
