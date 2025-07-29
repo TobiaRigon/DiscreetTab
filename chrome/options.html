@@ -4,11 +4,71 @@
   <meta charset="UTF-8" />
   <title>DiscreetTab Settings</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 400px; }
-    label { display: block; margin: 12px 0 4px; font-weight: bold; }
-    input[type="text"] { width: 100%; }
-    button { margin-top: 12px; }
-    .hint { font-size: 0.9em; color: #555; margin-bottom: 8px; }
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 400px;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 4px;
+      font-weight: bold;
+    }
+
+    input[type="text"] {
+      width: 100%;
+    }
+
+    button {
+      margin-top: 12px;
+    }
+
+    .tooltip {
+      display: inline-block;
+      position: relative;
+      cursor: help;
+      color: #0077cc;
+      text-decoration: underline dotted;
+    }
+
+    .tooltip-text {
+      visibility: hidden;
+      width: 280px;
+      background-color: #333;
+      color: #fff;
+      text-align: left;
+      padding: 8px;
+      border-radius: 4px;
+      position: absolute;
+      z-index: 1;
+      bottom: 125%; /* above the text */
+      left: 50%;
+      margin-left: -140px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      font-size: 0.85em;
+    }
+
+    .tooltip:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    .donate {
+      margin-top: 20px;
+      font-size: 0.9em;
+      color: #333;
+    }
+
+    .donate a {
+      color: #0077cc;
+      text-decoration: none;
+    }
+
+    .donate a:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -19,14 +79,24 @@
     Enable discreet mode for new tabs
   </label>
 
-  <label for="titleFormat">Tab title format:</label>
-  <div class="hint">
-    Use <code>{n}</code> in the text to insert the tab's unique number.  
-    Example: <code>Tab {n}</code> → "Tab 1", "Tab 2", etc.
-  </div>
+  <label for="titleFormat">
+    Tab title format:
+    <span class="tooltip">[?]
+      <span class="tooltip-text">
+        Use <code>{n}</code> in the text to insert the tab's unique number.<br />
+        Example: <code>Tab {n}</code> → "Tab 1", "Tab 2", etc.
+      </span>
+    </span>
+  </label>
+
   <input type="text" id="titleFormat" placeholder="Example: [{n}] or Tab {n}" />
 
   <button id="saveBtn">Save settings</button>
+
+  <div class="donate">
+    Like the extension? Support the project on
+    <a href="https://coff.ee/tobiarigon" target="_blank">Buy Me a Coffee ☕</a>
+  </div>
 
   <script src="options.js"></script>
 </body>
