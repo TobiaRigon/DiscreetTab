@@ -142,22 +142,29 @@
     Show original tab title
   </label>
 
-  <label for="titleFormat">
-    Tab title format:
-    <span class="tooltip">[?]
-      <span class="tooltip-text">
-        Use <code>{n}</code> in the text to insert the tab's unique number.<br />
-        Example: <code>Tab {n}</code> → "Tab 1", "Tab 2", etc.
+  <div id="customTitleContainer">
+    <label for="titleFormat">
+      Custom Tab title format:
+      <span class="tooltip">[?]
+        <span class="tooltip-text">
+          Use <code>{n}</code> in the text to insert the tab's unique number.<br />
+          Example: <code>Tab {n}</code> → "Tab 1", "Tab 2", etc.
+        </span>
       </span>
-    </span>
-  </label>
+    </label>
+    <input type="text" id="titleFormat" placeholder="Example: [{n}] or Tab {n}" />
+  </div>
 
-  <input type="text" id="titleFormat" placeholder="Example: [{n}] or Tab {n}" />
-
-  <label for="customFavicon">
-    Custom favicon URL:
+  <label>
+    <input type="checkbox" id="enableCustomFavicon" />
+    Enable custom favicon
   </label>
-  <input type="text" id="customFavicon" placeholder="https://example.com/favicon.png">
+  <div id="customFaviconContainer">
+    <label for="customFavicon">
+      Custom favicon URL:
+    </label>
+    <input type="text" id="customFavicon" placeholder="https://example.com/favicon.png">
+  </div>
 
   <button id="saveBtn">Save settings</button>
 
