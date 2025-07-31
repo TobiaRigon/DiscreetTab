@@ -24,6 +24,13 @@
     "action": {
       "default_title": "DiscreetTab",
       "default_icon": "DiscreetTab_Logo_128x128.png"
+    },
+  "commands": {
+    "toggle-discreet": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S"
+      },
+      "description": "Toggle DiscreetTab mode for current tab"
     }
   }
-  
+}

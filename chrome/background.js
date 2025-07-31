@@ -42,15 +42,23 @@ function setDomainData(data, domain, arr) {
 }
 
 // === 5. Gestione favicon ===
-function getFaviconDataUrl() {
-  // Puoi leggere da storage e permettere la scelta, qui default
-  return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgwJ/lr6pNwAAAABJRU5ErkJggg==";
+async function getFaviconDataUrl() {
+  return new Promise(resolve => {
+    chrome.storage.sync.get(['customFavicon'], (res) => {
+      if (res.customFavicon && res.customFavicon.trim().startsWith('http')) {
+        resolve(res.customFavicon.trim());
+      } else {
+        // Default trasparente
+        resolve("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgwJ/lr6pNwAAAABJRU5ErkJggg==");
+      }
+    });
+  });
 }
 
 // === 6. Storage ===
 function getStoredData() {
   return new Promise((resolve) => {
-    chrome.storage.local.get([STORAGE_KEY], (res) => {
+    chrome.storage.sync.get([STORAGE_KEY], (res) => {
       resolve(ensureObject(res[STORAGE_KEY]));
     });
   });
@@ -58,9 +66,9 @@ function getStoredData() {
 
 function getStoredOptions() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['titleFormat', 'defaultDiscreetEnabled'], (res) => {
+    chrome.storage.sync.get(['titleFormat', 'defaultDiscreetEnabled'], (res) => {
       resolve({
-        titleFormat: res.titleFormat || '[{n}]',
+        titleFormat: res.titleFormat || 'Tab{n}',
         defaultDiscreetEnabled: !!res.defaultDiscreetEnabled
       });
     });
@@ -68,19 +76,19 @@ function getStoredOptions() {
 }
 
 async function batchSet(obj) {
-  return new Promise(resolve => chrome.storage.local.set(obj, resolve));
+  return new Promise(resolve => chrome.storage.sync.set(obj, resolve));
 }
 
 function getNextAvailableIndex() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
+    chrome.storage.sync.get(['usedIndexes', 'freeIndexes'], (res) => {
       const used = ensureArray(res.usedIndexes).filter(Number.isInteger);
       const free = ensureArray(res.freeIndexes).filter(Number.isInteger);
 
       if (free.length > 0) {
         const next = free.sort((a, b) => a - b).shift();
         const remaining = free.filter(i => i !== next);
-        chrome.storage.local.set({ freeIndexes: remaining });
+        chrome.storage.sync.set({ freeIndexes: remaining });
         resolve(next);
       } else {
         const max = used.length > 0 ? Math.max(...used) : 0;
@@ -92,22 +100,22 @@ function getNextAvailableIndex() {
 
 function reserveIndex(index) {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['usedIndexes'], (res) => {
+    chrome.storage.sync.get(['usedIndexes'], (res) => {
       const used = new Set(ensureArray(res.usedIndexes).filter(Number.isInteger));
       used.add(index);
-      chrome.storage.local.set({ usedIndexes: Array.from(used) }, resolve);
+      chrome.storage.sync.set({ usedIndexes: Array.from(used) }, resolve);
     });
   });
 }
 
 function releaseIndex(index) {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
+    chrome.storage.sync.get(['usedIndexes', 'freeIndexes'], (res) => {
       const used = new Set(ensureArray(res.usedIndexes).filter(Number.isInteger));
       const free = new Set(ensureArray(res.freeIndexes).filter(Number.isInteger));
       used.delete(index);
       free.add(index);
-      chrome.storage.local.set({
+      chrome.storage.sync.set({
         usedIndexes: Array.from(used),
         freeIndexes: Array.from(free)
       }, resolve);
@@ -145,12 +153,15 @@ async function cleanupIndexes() {
 // === 9. Iniezione script discreto ===
 async function injectScript(tabId, number) {
   const options = await getStoredOptions();
+  const showTitle = await new Promise(resolve =>
+    chrome.storage.sync.get(['showTitle'], res => resolve(!!res.showTitle))
+  );
   const title = formatTitle(options.titleFormat, number);
-  const favicon = getFaviconDataUrl();
+  const favicon = await getFaviconDataUrl();
 
   await chrome.scripting.executeScript({
     target: { tabId },
-    func: (customTitle, faviconUrl) => {
+    func: (customTitle, faviconUrl, showTitle) => {
       function setDiscreet() {
         if (!document.head) return;
         document.querySelectorAll("link[rel*='icon']").forEach(e => e.remove());
@@ -159,20 +170,31 @@ async function injectScript(tabId, number) {
         link.type = "image/x-icon";
         link.href = faviconUrl;
         document.head.appendChild(link);
-        document.title = customTitle;
+        if (!showTitle) {
+          document.title = customTitle;
+        }
+        // Se showTitle è true, NON modificare il titolo
       }
       setDiscreet();
 
-      // Salva l'id dell'intervallo per poterlo cancellare
       if (window.__discreetTabInterval) clearInterval(window.__discreetTabInterval);
       window.__discreetTabInterval = setInterval(() => {
-        if (document.title !== customTitle) setDiscreet();
-        const icons = Array.from(document.querySelectorAll("link[rel*='icon']"));
-        const found = icons.some(l => l.href === faviconUrl);
-        if (!found) setDiscreet();
+        if (!showTitle && document.title !== customTitle) setDiscreet();
+        if (showTitle) {
+          // Solo controllo favicon
+          const icons = Array.from(document.querySelectorAll("link[rel*='icon']"));
+          const found = icons.some(l => l.href === faviconUrl);
+          if (!found) setDiscreet();
+        } else {
+          // Controllo sia titolo che favicon
+          if (document.title !== customTitle) setDiscreet();
+          const icons = Array.from(document.querySelectorAll("link[rel*='icon']"));
+          const found = icons.some(l => l.href === faviconUrl);
+          if (!found) setDiscreet();
+        }
       }, 2000);
     },
-    args: [title, favicon]
+    args: [title, favicon, showTitle]
   });
 }
 
@@ -296,9 +318,73 @@ chrome.tabs.onCreated.addListener(safeAsync(async (tab) => {
   }
 }));
 
+// Quando una tab torna "complete" dopo essere stata sospesa
+chrome.tabs.onUpdated.addListener(safeAsync(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete" || !tab.url || isUnsupportedUrl(tab.url)) return;
+  const domain = new URL(tab.url).hostname;
+  const data = await getStoredData();
+  let domainArr = getDomainData(data, domain);
+  if (domainArr.length > 0) {
+    await injectScript(tabId, domainArr[0].index);
+  }
+}));
+
 // Context menu
 chrome.contextMenus.onClicked.addListener((info) => {
   if (info.menuItemId === "open_settings") {
     chrome.runtime.openOptionsPage();
   }
 });
+
+// Comandi da tastiera
+chrome.commands.onCommand.addListener(safeAsync(async (command, tab) => {
+  if (command !== "toggle-discreet") return;
+
+  // Ottieni la tab attiva
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!activeTab || !activeTab.url || isUnsupportedUrl(activeTab.url)) return;
+
+  const url = new URL(activeTab.url);
+  const domain = url.hostname;
+  const tabId = activeTab.id;
+  const data = await getStoredData();
+  let domainArr = getDomainData(data, domain);
+
+  if (domainArr.length > 0) {
+    // Disattiva modalità discreta
+    for (const { index, originalTitle } of domainArr) {
+      await releaseIndex(index);
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: (title) => {
+          if (document.head) {
+            document.title = title;
+            document.querySelectorAll("link[rel*='icon']").forEach(e => e.remove());
+            const link = document.createElement("link");
+            link.rel = "icon";
+            link.href = "/favicon.ico";
+            document.head.appendChild(link);
+          }
+          if (window.__discreetTabInterval) {
+            clearInterval(window.__discreetTabInterval);
+            window.__discreetTabInterval = null;
+          }
+        },
+        args: [originalTitle]
+      });
+    }
+    setDomainData(data, domain, []);
+    await batchSet({ [STORAGE_KEY]: data });
+  } else {
+    // Attiva modalità discreta
+    const index = await getNextAvailableIndex();
+    await reserveIndex(index);
+    domainArr.push({
+      index,
+      originalTitle: activeTab.title || ''
+    });
+    setDomainData(data, domain, domainArr);
+    await batchSet({ [STORAGE_KEY]: data });
+    await injectScript(tabId, index);
+  }
+}));
