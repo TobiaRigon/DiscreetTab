@@ -1,6 +1,7 @@
+// === Costanti ===
 const STORAGE_KEY = 'discreet_domains';
 
-// --- 1. Gestione errori globale ---
+// === 1. Gestione errori globale ===
 function safeAsync(fn) {
   return async (...args) => {
     try {
@@ -11,7 +12,7 @@ function safeAsync(fn) {
   };
 }
 
-// --- 2. Debounce/throttle per onCompleted ---
+// === 2. Debounce/throttle per onCompleted ===
 let lastNav = {};
 function throttleNav(tabId, url, ms = 500) {
   const key = `${tabId}:${url}`;
@@ -21,15 +22,110 @@ function throttleNav(tabId, url, ms = 500) {
   return true;
 }
 
-// --- 3. Validazione input ---
+// === 3. Helpers ===
 function ensureArray(arr) {
   return Array.isArray(arr) ? arr : [];
 }
 function ensureObject(obj) {
   return obj && typeof obj === 'object' ? obj : {};
 }
+function formatTitle(template, number) {
+  return template.replaceAll('{n}', number.toString());
+}
 
-// --- 4. Cleanup dati ---
+// === 4. Gestione dominio ===
+function getDomainData(data, domain) {
+  return Array.isArray(data[domain]) ? data[domain] : [];
+}
+function setDomainData(data, domain, arr) {
+  data[domain] = arr;
+}
+
+// === 5. Gestione favicon ===
+function getFaviconDataUrl() {
+  // Puoi leggere da storage e permettere la scelta, qui default
+  return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgwJ/lr6pNwAAAABJRU5ErkJggg==";
+}
+
+// === 6. Storage ===
+function getStoredData() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([STORAGE_KEY], (res) => {
+      resolve(ensureObject(res[STORAGE_KEY]));
+    });
+  });
+}
+
+function getStoredOptions() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['titleFormat', 'defaultDiscreetEnabled'], (res) => {
+      resolve({
+        titleFormat: res.titleFormat || '[{n}]',
+        defaultDiscreetEnabled: !!res.defaultDiscreetEnabled
+      });
+    });
+  });
+}
+
+async function batchSet(obj) {
+  return new Promise(resolve => chrome.storage.local.set(obj, resolve));
+}
+
+function getNextAvailableIndex() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
+      const used = ensureArray(res.usedIndexes).filter(Number.isInteger);
+      const free = ensureArray(res.freeIndexes).filter(Number.isInteger);
+
+      if (free.length > 0) {
+        const next = free.sort((a, b) => a - b).shift();
+        const remaining = free.filter(i => i !== next);
+        chrome.storage.local.set({ freeIndexes: remaining });
+        resolve(next);
+      } else {
+        const max = used.length > 0 ? Math.max(...used) : 0;
+        resolve(max + 1);
+      }
+    });
+  });
+}
+
+function reserveIndex(index) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['usedIndexes'], (res) => {
+      const used = new Set(ensureArray(res.usedIndexes).filter(Number.isInteger));
+      used.add(index);
+      chrome.storage.local.set({ usedIndexes: Array.from(used) }, resolve);
+    });
+  });
+}
+
+function releaseIndex(index) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
+      const used = new Set(ensureArray(res.usedIndexes).filter(Number.isInteger));
+      const free = new Set(ensureArray(res.freeIndexes).filter(Number.isInteger));
+      used.delete(index);
+      free.add(index);
+      chrome.storage.local.set({
+        usedIndexes: Array.from(used),
+        freeIndexes: Array.from(free)
+      }, resolve);
+    });
+  });
+}
+
+// === 7. Utility ===
+function isUnsupportedUrl(url) {
+  return (
+    url.startsWith("chrome://") ||
+    url.startsWith("chrome-extension://") ||
+    url.startsWith("about:") ||
+    url.startsWith("file://")
+  );
+}
+
+// === 8. Cleanup dati all'avvio ===
 chrome.runtime.onStartup.addListener(() => {
   cleanupIndexes();
 });
@@ -46,29 +142,43 @@ async function cleanupIndexes() {
   }
 }
 
-// --- 5. Modularità: helpers separati (qui in fondo) ---
+// === 9. Iniezione script discreto ===
+async function injectScript(tabId, number) {
+  const options = await getStoredOptions();
+  const title = formatTitle(options.titleFormat, number);
+  const favicon = getFaviconDataUrl();
 
-// --- 6. Supporto multi-tab per dominio ---
-function getDomainData(data, domain) {
-  // Ora ogni dominio può avere un array di oggetti {index, originalTitle}
-  return Array.isArray(data[domain]) ? data[domain] : [];
-}
-function setDomainData(data, domain, arr) {
-  data[domain] = arr;
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    func: (customTitle, faviconUrl) => {
+      function setDiscreet() {
+        if (!document.head) return;
+        document.querySelectorAll("link[rel*='icon']").forEach(e => e.remove());
+        const link = document.createElement("link");
+        link.rel = "icon";
+        link.type = "image/x-icon";
+        link.href = faviconUrl;
+        document.head.appendChild(link);
+        document.title = customTitle;
+      }
+      setDiscreet();
+
+      // Salva l'id dell'intervallo per poterlo cancellare
+      if (window.__discreetTabInterval) clearInterval(window.__discreetTabInterval);
+      window.__discreetTabInterval = setInterval(() => {
+        if (document.title !== customTitle) setDiscreet();
+        const icons = Array.from(document.querySelectorAll("link[rel*='icon']"));
+        const found = icons.some(l => l.href === faviconUrl);
+        if (!found) setDiscreet();
+      }, 2000);
+    },
+    args: [title, favicon]
+  });
 }
 
-// --- 7. Configurabilità favicon ---
-function getFaviconDataUrl() {
-  // Puoi leggere da storage e permettere la scelta, qui default
-  return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgwJ/lr6pNwAAAABJRU5ErkJggg==";
-}
+// === 10. Event listeners principali ===
 
-// --- 8. Performance: raggruppa set ---
-async function batchSet(obj) {
-  return new Promise(resolve => chrome.storage.local.set(obj, resolve));
-}
-
-// --- Event listeners con safeAsync ---
+// Installazione e setup iniziale
 chrome.runtime.onInstalled.addListener(safeAsync(async () => {
   const res = await new Promise(resolve => chrome.storage.local.get([STORAGE_KEY, 'usedIndexes', 'freeIndexes'], resolve));
   if (!res[STORAGE_KEY]) await batchSet({ [STORAGE_KEY]: {} });
@@ -82,6 +192,7 @@ chrome.runtime.onInstalled.addListener(safeAsync(async () => {
   });
 }));
 
+// Click sull'icona dell'estensione
 chrome.action.onClicked.addListener(safeAsync(async (tab) => {
   if (!tab || !tab.url || !tab.id || isUnsupportedUrl(tab.url)) return;
 
@@ -131,6 +242,7 @@ chrome.action.onClicked.addListener(safeAsync(async (tab) => {
   }
 }));
 
+// Navigazione completata
 chrome.webNavigation.onCompleted.addListener(safeAsync(async ({ tabId, frameId, url }) => {
   if (frameId !== 0 || isUnsupportedUrl(url)) return;
   if (!throttleNav(tabId, url)) return;
@@ -159,6 +271,7 @@ chrome.webNavigation.onCompleted.addListener(safeAsync(async ({ tabId, frameId, 
   }
 }));
 
+// Tab creato
 chrome.tabs.onCreated.addListener(safeAsync(async (tab) => {
   if (!tab || !tab.id || !tab.url || isUnsupportedUrl(tab.url)) return;
 
@@ -183,118 +296,9 @@ chrome.tabs.onCreated.addListener(safeAsync(async (tab) => {
   }
 }));
 
+// Context menu
 chrome.contextMenus.onClicked.addListener((info) => {
   if (info.menuItemId === "open_settings") {
     chrome.runtime.openOptionsPage();
   }
 });
-
-// --- Helpers ---
-function getStoredData() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get([STORAGE_KEY], (res) => {
-      resolve(ensureObject(res[STORAGE_KEY]));
-    });
-  });
-}
-
-function getStoredOptions() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['titleFormat', 'defaultDiscreetEnabled'], (res) => {
-      resolve({
-        titleFormat: res.titleFormat || '[{n}]',
-        defaultDiscreetEnabled: !!res.defaultDiscreetEnabled
-      });
-    });
-  });
-}
-
-function formatTitle(template, number) {
-  return template.replaceAll('{n}', number.toString());
-}
-
-async function injectScript(tabId, number) {
-  const options = await getStoredOptions();
-  const title = formatTitle(options.titleFormat, number);
-  const favicon = getFaviconDataUrl();
-
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    func: (customTitle, faviconUrl) => {
-      function setDiscreet() {
-        if (!document.head) return;
-        document.querySelectorAll("link[rel*='icon']").forEach(e => e.remove());
-        const link = document.createElement("link");
-        link.rel = "icon";
-        link.type = "image/x-icon";
-        link.href = faviconUrl;
-        document.head.appendChild(link);
-        document.title = customTitle;
-      }
-      setDiscreet();
-
-      // Salva l'id dell'intervallo per poterlo cancellare
-      if (window.__discreetTabInterval) clearInterval(window.__discreetTabInterval);
-      window.__discreetTabInterval = setInterval(() => {
-        if (document.title !== customTitle) setDiscreet();
-        const icons = Array.from(document.querySelectorAll("link[rel*='icon']"));
-        const found = icons.some(l => l.href === faviconUrl);
-        if (!found) setDiscreet();
-      }, 2000);
-    },
-    args: [title, favicon]
-  });
-}
-
-function isUnsupportedUrl(url) {
-  return (
-    url.startsWith("chrome://") ||
-    url.startsWith("chrome-extension://") ||
-    url.startsWith("about:") ||
-    url.startsWith("file://")
-  );
-}
-
-function getNextAvailableIndex() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
-      const used = ensureArray(res.usedIndexes).filter(Number.isInteger);
-      const free = ensureArray(res.freeIndexes).filter(Number.isInteger);
-
-      if (free.length > 0) {
-        const next = free.sort((a, b) => a - b).shift();
-        const remaining = free.filter(i => i !== next);
-        chrome.storage.local.set({ freeIndexes: remaining });
-        resolve(next);
-      } else {
-        const max = used.length > 0 ? Math.max(...used) : 0;
-        resolve(max + 1);
-      }
-    });
-  });
-}
-
-function reserveIndex(index) {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['usedIndexes'], (res) => {
-      const used = new Set(ensureArray(res.usedIndexes).filter(Number.isInteger));
-      used.add(index);
-      chrome.storage.local.set({ usedIndexes: Array.from(used) }, resolve);
-    });
-  });
-}
-
-function releaseIndex(index) {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['usedIndexes', 'freeIndexes'], (res) => {
-      const used = new Set(ensureArray(res.usedIndexes).filter(Number.isInteger));
-      const free = new Set(ensureArray(res.freeIndexes).filter(Number.isInteger));
-      used.delete(index);
-      free.add(index);
-      chrome.storage.local.set({
-        usedIndexes: Array.from(used),
-        freeIndexes: Array.from(free)
-      }, resolve);
-    });
-  });
-}
